@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 # Author: PJWu
+# Last update: 2020-03-31
 
 import argparse
 import pandas as pd
@@ -8,17 +9,17 @@ from tqdm import tqdm
 
 def run(args):
     input_tissue = args.input # Tissue to extract
-    output_filename = args.output # This mathc the "dest": dest="output"
+    # output_filename = args.output # This mathc the "dest": dest="output"
 
     # Do stuff
 
     # Load annotations of sample attributes
-    print("Loading GTEx(v7) Sample attributes...")
-    df_anno = pd.read_csv("/home/pinjouwu9325/gtex/v7/annotations/GTEx_v7_Annotations_SampleAttributesDS.txt", sep='\t')
+    print("Loading GTEx(v8) Sample attributes...")
+    df_anno = pd.read_csv("/NAS_lab/pinjouwu9325/gtex/v8/annotations/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt", sep='\t')
 
-    # Load gene_tpm.gct (GTEx v7)
-    print("Loading GTEx(v7) 2016-01-15_v7_RNASeQCv1.1.8_gene_tpm.gct...")
-    df = pd.read_csv("/home/pinjouwu9325/gtex/v7/RNASeq/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_tpm.gct", sep='\t')
+    # Load gene_tpm.gct (GTEx v8)
+    print("Loading GTEx(v8) GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_tpm.gct")
+    df = pd.read_csv("/NAS_lab/pinjouwu9325/gtex/v8/expr/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_tpm.gct",skiprows=2, sep='\t')
    
     # Extract sample id of tissue required
     tissue_dict = {'Adipose-Sub':'Adipose - Subcutaneous', 'Adipose-Vis':'Adipose - Visceral (Omentum)', 
@@ -41,34 +42,39 @@ def run(args):
                    'Skin-SE':'Skin - Sun Exposed (Lower leg)', 'SI':'Small Intestine - Terminal Ileum', 'Spleen':'Spleen', 
                    'Stomach':'Stomach', 'Testis':'Testis', 'Thyroid':'Thyroid', 'Uterus':'Uterus', 'Vagina':'Vagina', 
                    'WB':'Whole Blood'}
-    print("Extracting " + input_tissue + " data...") 
-    df_tissue_anno = df_anno[df_anno.SMTSD == tissue_dict[input_tissue]]
-    id_list = df_tissue_anno.SAMPID.tolist()
 
-    # Filter data by id
-    filter_list = ['Description', 'Name']
-    filter_list.extend(id_list)
-    df_tissue_data = df.filter(items=filter_list)
+    input_tissue = input_tissue.split(",")
+    for t in input_tissue:
+        print("Filtering " + t + "...")
+        # Filter samples of specific tissue
+        df_tissue_anno = df_anno[df_anno.SMTSD == tissue_dict[t]]
+        id_list = df_tissue_anno.SAMPID.tolist()
 
-    # Clean the genes with all the expression data is zero
-    print("Excluding any gene with a read count of zero(TPM=0) in any sample...") 
-    index_list=[]
-    for i in tqdm(range(df_tissue_data.shape[0])):
-        count = 0
-        for j in range(2, df_tissue_data.shape[1]):
-            if df_tissue_data.iloc[i, j] == 0:
-                count+=1
-        if count==0:
-            index_list.append(i)
-    df_tissue_data_clean = df_tissue_data.iloc[index_list,:]
+        # Filter gene expression profile by sample ID
+        filter_list = ['Description', 'Name']
+        filter_list.extend(id_list)
+        df_tissue_data = df.filter(items=filter_list)
 
-    # Export data
-    if bool(output_filename) == True:
-        name = str(output_filename)
-    else:
-        name = str(input_tissue + ".csv")
-    df_tissue_data_clean.to_csv(name, sep=',', encoding = 'utf-8')
-    print(name + " has been exported and TissueExtractor is finished")
+        # Filter out the genes with any gene expression of a sample is zero
+        print("Filtering out the genes with any gene expression of a sample is zero(TPM=0)...") 
+        index_list=[]
+        for i in tqdm(range(df_tissue_data.shape[0])):
+            count = 0
+            for j in range(2, df_tissue_data.shape[1]):
+                if df_tissue_data.iloc[i, j] == 0:
+                    count+=1
+            if count==0:
+                index_list.append(i)
+        df_tissue_data_clean = df_tissue_data.iloc[index_list,:]
+
+    # # Export data
+    # if bool(output_filename) == True:
+    #     name = str(output_filename)
+    # else:
+        # name = str(input_tissue + ".csv")
+    filename = str(t+".gct")
+    df_tissue_data_clean.to_csv(filename, sep=',', encoding = 'utf-8', index=0)
+    print(filename + " has been exported.")
 
 
 def main():
@@ -76,7 +82,7 @@ def main():
     prog='TissueExtractor',
     formatter_class=argparse.RawDescriptionHelpFormatter, 
     description='''\
-            This will do extraction of the specific tissue data from GTEx tpm dataset(v7).
+            This will do extraction of the specific tissue data from GTEx tpm dataset(v8).
             Any gene with a read count of zero(TPM=0) in any sample will be excluded. The output file will be a csv file.
             
             Use the tissue key for input. Please note the capitalized case in each tissue key.
@@ -112,8 +118,8 @@ def main():
             [Vagina]:Vagina                              [WB]:Whole Blood
                    ''')
 
-    parser.add_argument("-i", help="input tissue key for extraction", dest="input", type=str, required=True)
-    parser.add_argument("-o", help="ouput filename, default is set to input tissue key", dest="output", type=str) # default=Tissuename.csv
+    parser.add_argument("-i", help="Input a tissue key for extraction or a common seperate list of tissue key", dest="input", type=str, required=True)
+    # parser.add_argument("-o", help="ouput filename, default is set to input tissue key", dest="output", type=str) # default=Tissuename.csv
     parser.set_defaults(func=run)
     args=parser.parse_args()
     args.func(args)
